@@ -27,15 +27,23 @@ six_df = pd.read_csv('./data/SIX.csv')
 spot_df = pd.read_csv('./data/SPOT.csv')
 
 dfs = {
-    'AMC': amc_df,
-    'DIS': dis_df,
-    'NFLX': nflx_df,
-    'ROKU': roku_df,
-    'SIX': six_df,
-    'SPOT': spot_df,
+    'in': {
+        'NFLX': nflx_df,
+        'ROKU': roku_df,
+        'SPOT': spot_df,
+    },
+    'out': {
+        'AMC': amc_df,
+        'DIS': dis_df,
+        'SIX': six_df,
+    }
 }
 
-for df in dfs.values():
+for df in dfs['in'].values():
+    initial_share_price = df['Close'].iloc[0]
+    df['YTD Gain (%)'] = (df['Close'] - initial_share_price) / initial_share_price * 100
+
+for df in dfs['out'].values():
     initial_share_price = df['Close'].iloc[0]
     df['YTD Gain (%)'] = (df['Close'] - initial_share_price) / initial_share_price * 100
 
@@ -50,24 +58,39 @@ who_data_frame = who_dataset.get_data(countryId='US', start=START, end=END)
 app.layout = html.Div([
     
     dcc.Dropdown(
-        id='stock-ticker-input',
+        id='stock-ticker-input-out',
         options=[
             {
                 'label': key,
                 'value': str(key)
             }
-            for key in dfs.keys()
+            for key in dfs['out'].keys()
+        ],
+        value=['SIX',],
+        multi=True
+    ),
+
+    dcc.Graph(id="graph-in"),
+
+    dcc.Dropdown(
+        id='stock-ticker-input-in',
+        options=[
+            {
+                'label': key,
+                'value': str(key)
+            }
+            for key in dfs['in'].keys()
         ],
         value=['NFLX',],
         multi=True
     ),
 
-    dcc.Graph(id="graph"),
+    dcc.Graph(id="graph-out"),
 ])
 
 @app.callback(
-    Output("graph", "figure"), 
-    [Input("stock-ticker-input", "value")])
+    Output("graph-in", "figure"), 
+    [Input("stock-ticker-input-in", "value")])
 def display_(tickers):
 
     # Create figure with secondary y-axis
@@ -76,7 +99,46 @@ def display_(tickers):
     for ticker in tickers:
         # Add traces
         fig.add_trace(
-            go.Scatter(x=dfs[ticker]['Date'], y=dfs[ticker]['YTD Gain (%)'], name="{} Closing Price".format(ticker)),
+            go.Scatter(x=dfs['in'][ticker]['Date'], y=dfs['in'][ticker]['YTD Gain (%)'], name="{} Closing Price".format(ticker)),
+            secondary_y=False,
+        )
+
+    fig.add_trace(
+        go.Scatter(x=who_data_frame.index, y=who_data_frame['totalConfirmed'], name="Covid Cases (Total)"),
+        secondary_y=True,
+    )
+
+    # Add figure title
+    fig.update_layout(
+        title_text="Entertainment Stock Performance & Covid Cases"
+    )
+
+    # Set x-axis title
+    fig.update_xaxes(title_text="Date")
+
+    # Set y-axes titles
+    fig.update_yaxes(
+        title_text="YTD Gain (%)", 
+        secondary_y=False)
+    fig.update_yaxes(
+        title_text="<b>Total Confirmed Covid Cases", 
+        secondary_y=True)
+
+    return fig
+
+@app.callback(
+    Output("graph-out", "figure"), 
+    [Input("stock-ticker-input-out", "value")]
+)
+def display_(tickers):
+
+    # Create figure with secondary y-axis
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    for ticker in tickers:
+        # Add traces
+        fig.add_trace(
+            go.Scatter(x=dfs['out'][ticker]['Date'], y=dfs['out'][ticker]['YTD Gain (%)'], name="{} Closing Price".format(ticker)),
             secondary_y=False,
         )
 
